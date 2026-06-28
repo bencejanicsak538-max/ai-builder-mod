@@ -4,6 +4,10 @@ pluginManagement {
             name = 'Fabric'
             url = 'https://maven.fabricmc.net/'
         }
+        maven {
+            name = 'Shadow'
+            url = 'https://plugins.gradle.org/m2/'
+        }
         gradlePluginPortal()
     }
 }

@@ -1,33 +1,63 @@
 package hu.bence.aibuilder;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import com.google.gson.*;
 import net.minecraft.server.command.ServerCommandSource;
 
 public class OpenRouterClient {
-    private static final String SYSTEM_PROMPT = "You are an AI that converts Minecraft build requests into strict JSON only. Output ONLY valid JSON. No markdown. No explanation.\nSchema:\n{\n  \"originMode\": \"player\",\n  \"blocks\": [\n    {\"dx\":0,\"dy\":0,\"dz\":0,\"block\":\"minecraft:stone\"}\n  ]\n}\nRules:\n- Coordinates are relative to the player.\n- Use only vanilla 1.20.1 block ids.\n- Keep builds compact and symmetrical when reasonable.\n- Never exceed the requested size.\n- Never return more than 512 blocks.\n- Prefer simple solid structures over detailed noise.";
+    private static final String SYSTEM_PROMPT = 
+        "You are an AI assistant that generates Minecraft build instructions in strict JSON format only.\n" +
+        "Output ONLY valid JSON, no markdown, no explanation, no extra text.\n" +
+        "Schema:\n" +
+        "{\n" +
+        "  \"originMode\": \"player\",\n" +
+        "  \"blocks\": [\n" +
+        "    {\"dx\":0, \"dy\":0, \"dz\":0, \"block\":\"minecraft:stone\"}\n" +
+        "  ]\n" +
+        "}\n" +
+        "Rules:\n" +
+        "- dx/dy/dz are integer offsets from the player position\n" +
+        "- Only use valid Minecraft 1.20.1 block IDs (e.g. minecraft:stone, minecraft:oak_log, minecraft:glass)\n" +
+        "- Maximum 512 blocks per build\n" +
+        "- Build structures that make sense architecturally\n" +
+        "- dy=0 is ground level, positive dy goes up\n" +
+        "- Create walls, floors, roofs properly\n" +
+        "- Use varied block types for realistic builds";
 
     public static String generate(String prompt, ServerCommandSource source, SimpleConfig cfg) throws Exception {
-        String key = System.getenv().getOrDefault("AI_BUILDER_OPENROUTER_KEY", cfg.openrouter.apiKey);
-        if (key == null || key.isBlank() || key.contains("PUT_NEW_KEY_HERE")) throw new RuntimeException("OpenRouter API key hi\u00e1nyzik.");
-        String body = Json.GSON.toJson(java.util.Map.of(
-            "model", cfg.openrouter.model,
-            "messages", java.util.List.of(
-                java.util.Map.of("role", "system", "content", SYSTEM_PROMPT),
-                java.util.Map.of("role", "user", "content", prompt)
-            )
-        ));
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(cfg.openrouter.url))
-            .header("Authorization", "Bearer " + key)
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build();
-        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() >= 300) throw new RuntimeException("OpenRouter hiba: " + response.body());
-        var root = com.google.gson.JsonParser.parseString(response.body()).getAsJsonObject();
-        return root.getAsJsonArray("choices").get(0).getAsJsonObject().get("message").getAsJsonObject().get("content").getAsString();
+        String key = System.getenv("AI_BUILDER_OPENROUTER_KEY");
+        if (key == null || key.isBlank()) key = cfg.openrouter.apiKey;
+        if (key == null || key.isBlank() || key.contains("PUT_NEW_KEY_HERE"))
+            throw new RuntimeException("OpenRouter API key hiányzik a configból!");
+
+        JsonObject msgSystem = new JsonObject();
+        msgSystem.addProperty("role", "system");
+        msgSystem.addProperty("content", SYSTEM_PROMPT);
+
+        JsonObject msgUser = new JsonObject();
+        msgUser.addProperty("role", "user");
+        msgUser.addProperty("content", prompt);
+
+        JsonArray messages = new JsonArray();
+        messages.add(msgSystem);
+        messages.add(msgUser);
+
+        JsonObject requestBody = new JsonObject();
+        requestBody.addProperty("model", cfg.openrouter.model);
+        requestBody.add("messages", messages);
+        requestBody.addProperty("temperature", 0.2);
+        requestBody.addProperty("max_tokens", 4096);
+
+        String response = HttpUtil.post(
+            cfg.openrouter.url,
+            requestBody.toString(),
+            "Bearer " + key,
+            "application/json"
+        );
+
+        JsonObject root = JsonParser.parseString(response).getAsJsonObject();
+        return root.getAsJsonArray("choices")
+            .get(0).getAsJsonObject()
+            .get("message").getAsJsonObject()
+            .get("content").getAsString();
     }
 }

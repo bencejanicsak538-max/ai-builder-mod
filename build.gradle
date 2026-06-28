@@ -1,6 +1,7 @@
 plugins {
     id 'fabric-loom' version '1.6.5'
     id 'maven-publish'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 version = project.mod_version
@@ -15,11 +16,28 @@ repositories {
     maven { url = 'https://maven.fabricmc.net/' }
 }
 
+configurations {
+    shade
+    implementation.extendsFrom shade
+}
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // Gson is already in Minecraft, but we shade it for safety
+    shade 'com.google.code.gson:gson:2.10.1'
+    shade 'org.apache.httpcomponents.client5:httpclient5:5.3.1'
+}
+
+shadowJar {
+    configurations = [project.configurations.shade]
+    archiveClassifier = ''
+    relocate 'com.google.gson', 'hu.bence.aibuilder.lib.gson'
+    relocate 'org.apache.hc', 'hu.bence.aibuilder.lib.hc'
+    mergeServiceFiles()
 }
 
 processResources {
@@ -38,3 +56,5 @@ java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
 }
+
+assemble.dependsOn shadowJar
