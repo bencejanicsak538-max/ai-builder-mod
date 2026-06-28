@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "ai-builder",
+  "version": "${version}",
+  "name": "AI Builder",
+  "description": "Chat-controlled AI building assistant for Minecraft.",
+  "authors": ["Bence"],
+  "license": "MIT",
+  "environment": "server",
+  "entrypoints": {
+    "main": ["hu.bence.aibuilder.AIBuilderMod"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.10",
+    "minecraft": "1.20.1",
+    "java": ">=17",
+    "fabric-api": "*"
+  }
+}
