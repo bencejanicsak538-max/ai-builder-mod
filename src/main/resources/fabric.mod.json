@@ -6,9 +6,10 @@
   "description": "Chat-controlled AI building assistant for Minecraft.",
   "authors": ["Bence"],
   "license": "MIT",
-  "environment": "server",
+  "environment": "*",
   "entrypoints": {
-    "main": ["hu.bence.aibuilder.AIBuilderMod"]
+    "main": ["hu.bence.aibuilder.AIBuilderMod"],
+    "client": ["hu.bence.aibuilder.client.AIBuilderClient"]
   },
   "depends": {
     "fabricloader": ">=0.16.10",

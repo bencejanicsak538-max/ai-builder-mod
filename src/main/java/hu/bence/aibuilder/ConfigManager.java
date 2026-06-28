@@ -25,9 +25,18 @@ public class ConfigManager {
         }
     }
 
+    public static void saveConfig(SimpleConfig cfg) {
+        try {
+            if (!Files.exists(CONFIG_DIR)) Files.createDirectories(CONFIG_DIR);
+            Files.writeString(CONFIG_FILE, Json.GSON.toJson(cfg));
+        } catch (IOException e) {
+            throw new RuntimeException("Config ment\u00e9se sikertelen", e);
+        }
+    }
+
     private static String defaultConfig() {
         return "{\n" +
-            "  \"provider\": \"ollama\",\n" +
+            "  \"provider\": \"gemini\",\n" +
             "  \"maxBlocks\": 512,\n" +
             "  \"maxRadius\": 24,\n" +
             "  \"allowReplaceSolid\": false,\n" +
