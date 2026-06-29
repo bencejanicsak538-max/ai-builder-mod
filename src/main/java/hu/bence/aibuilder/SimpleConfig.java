@@ -5,6 +5,9 @@ public class SimpleConfig {
     public int maxBlocks = 512;
     public int maxRadius = 24;
     public boolean allowReplaceSolid = false;
+    // If true, places blocks even in creative mode checks (default false for safety)
+    public boolean requiresOP = false;
+
     public Provider openrouter = new Provider(
         "PUT_KEY_HERE",
         "google/gemini-2.0-flash-exp:free",

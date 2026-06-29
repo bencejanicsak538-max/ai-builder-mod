@@ -1,8 +1,6 @@
 package hu.bence.aibuilder;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-
+// Kept for backwards compatibility - use ConfigManager.GSON directly
 public class Json {
-    public static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    public static final com.google.gson.Gson GSON = ConfigManager.GSON;
 }
