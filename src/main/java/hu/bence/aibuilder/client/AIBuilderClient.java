@@ -1,12 +1,15 @@
 package hu.bence.aibuilder.client;
 
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import org.lwjgl.glfw.GLFW;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 
+@Environment(EnvType.CLIENT)
 public class AIBuilderClient implements ClientModInitializer {
     public static KeyBinding configKey;
 
@@ -22,7 +25,7 @@ public class AIBuilderClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (configKey.wasPressed()) {
                 if (client.currentScreen == null) {
-                    client.setScreen(new ConfigScreen(client.currentScreen));
+                    client.setScreen(new ConfigScreen(null));
                 }
             }
         });

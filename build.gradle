@@ -13,17 +13,6 @@ base {
 repositories {
 }
 
-loom {
-	splitEnvironmentSourceSets()
-
-	mods {
-		"ai-builder" {
-			sourceSet sourceSets.main
-			sourceSet sourceSets.client
-		}
-	}
-}
-
 dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
@@ -33,7 +22,6 @@ dependencies {
 
 processResources {
 	inputs.property "version", project.version
-
 	filesMatching("fabric.mod.json") {
 		expand "version": project.version
 	}
@@ -45,23 +33,12 @@ tasks.withType(JavaCompile).configureEach {
 
 java {
 	withSourcesJar()
-
 	sourceCompatibility = JavaVersion.VERSION_17
 	targetCompatibility = JavaVersion.VERSION_17
 }
 
 jar {
 	from("LICENSE") {
-		rename { "${it}_${project.base.archivesName.get()}" }
-	}
-}
-
-publishing {
-	publications {
-		mavenJava(MavenPublication) {
-			from components.java
-		}
-	}
-	repositories {
+		rename { "${it}_ai-builder" }
 	}
 }
