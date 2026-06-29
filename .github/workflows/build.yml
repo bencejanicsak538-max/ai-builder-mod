@@ -3,13 +3,13 @@ name: Build Mod
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -31,5 +31,29 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ai-builder-mod
-          path: build/libs/*.jar
+          path: build/libs/ai-builder-*.jar
+          exclude: build/libs/*-sources.jar
           if-no-files-found: error
+
+      - name: Delete old latest release
+        run: |
+          gh release delete latest --yes 2>/dev/null || true
+          git push --delete origin latest 2>/dev/null || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "AI Builder Mod - Legfrissebb"
+          body: |
+            ## Telepites
+            1. Toltsd le az `ai-builder-1.0.0.jar` fajlt
+            2. Tedd a `.minecraft/mods/` mappaba
+            3. Kell meg: Fabric Loader 0.16.10 + Fabric API 1.20.1
+            4. Inditsd el a Minecraftot, nyomd meg **B** gombot a kulcsok beallitasahoz
+          files: build/libs/ai-builder-*.jar
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
