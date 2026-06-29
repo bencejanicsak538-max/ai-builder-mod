@@ -11,12 +11,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Lerakott "display" armor stand - lebego szoveggel mutatja az epites halalasat.
- * /aidisplay paranccsal rakja le a jatekos, real-time frissul blokkonkent.
- */
 public class ProgressDisplayManager {
 
+    // FIX: ConcurrentHashMap - thread-safe
     private static final Map<String, UUID> DISPLAYS = new ConcurrentHashMap<>();
 
     public static void spawnDisplay(ServerWorld world, ServerPlayerEntity player, BlockPos pos) {
@@ -34,7 +31,7 @@ public class ProgressDisplayManager {
         stand.setShowArms(false);
         stand.setHideBasePlate(true);
 
-        // Marker flag NBT-n keresztul (setMarker() private a Fabric 1.20.1 API-ban)
+        // setMarker() private -> NBT-n keresztul
         NbtCompound nbt = stand.writeNbt(new NbtCompound());
         nbt.putBoolean("Marker", true);
         stand.readNbt(nbt);
@@ -45,9 +42,6 @@ public class ProgressDisplayManager {
         player.sendMessage(Text.literal(
             "\u00a7a[AI Builder] Progress display lerakva! Inditsd el: /ai <prompt> | Eltavolit: /aidisplay remove"
         ), false);
-
-        AIBuilderMod.LOGGER.info("[AI Builder] Display spawned @ {} for {}",
-            pos, player.getGameProfile().getName());
     }
 
     public static void updateDisplay(ServerWorld world, String playerUuid, int placed, int total) {
@@ -69,9 +63,16 @@ public class ProgressDisplayManager {
         net.minecraft.entity.Entity ent = world.getEntity(standUuid);
         if (!(ent instanceof ArmorStandEntity stand)) return;
 
-        stand.setCustomName(Text.literal(
-            "\u00a7a[AI Builder] \u2714 KESZ! " + placed + "/" + total + " blokk | /aiundo"
-        ));
+        // FIX: cancel eset (placed == -1) kulonbozo uzenet
+        if (placed < 0) {
+            stand.setCustomName(Text.literal(
+                "\u00a7c[AI Builder] \u2716 Leallitva | /ai <prompt> uj epiteshez"
+            ));
+        } else {
+            stand.setCustomName(Text.literal(
+                "\u00a7a[AI Builder] \u2714 KESZ! " + placed + "/" + total + " blokk | /aiundo"
+            ));
+        }
     }
 
     public static void removeDisplay(ServerWorld world, String playerUuid) {

@@ -24,7 +24,7 @@ public class AIBuilderMod implements ModInitializer {
     public void onInitialize() {
         ConfigManager.ensureConfig();
         SimpleConfig cfg = ConfigManager.load();
-        LOGGER.info("[AI Builder] v2.3 betoltve! Provider: {}, Modell: {}, MaxBlokk: {}, MaxSugar: {}",
+        LOGGER.info("[AI Builder] v2.4 betoltve! Provider: {}, Modell: {}, MaxBlokk: {}, MaxSugar: {}",
             cfg.provider,
             cfg.openrouter != null ? cfg.openrouter.model : "N/A",
             cfg.maxBlocks,
@@ -32,28 +32,22 @@ public class AIBuilderMod implements ModInitializer {
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 
-            // /ai <prompt>
             dispatcher.register(CommandManager.literal("ai")
                 .then(CommandManager.argument("prompt", StringArgumentType.greedyString())
                     .executes(ctx -> executeAI(ctx.getSource(), StringArgumentType.getString(ctx, "prompt")))));
 
-            // /aiundo
             dispatcher.register(CommandManager.literal("aiundo")
                 .executes(ctx -> AIUndoManager.undoLast(ctx.getSource())));
 
-            // /aicancel
             dispatcher.register(CommandManager.literal("aicancel")
                 .executes(ctx -> cancelBuild(ctx.getSource())));
 
-            // /aistatus
             dispatcher.register(CommandManager.literal("aistatus")
                 .executes(ctx -> showStatus(ctx.getSource())));
 
-            // /aidisplay - lerak egy progress display-t a labadnal
             dispatcher.register(CommandManager.literal("aidisplay")
                 .executes(ctx -> placeDisplay(ctx.getSource())));
 
-            // /aidisplay remove - torli a display-t
             dispatcher.register(CommandManager.literal("aidisplay")
                 .then(CommandManager.literal("remove")
                     .executes(ctx -> removeDisplay(ctx.getSource()))));
@@ -98,10 +92,9 @@ public class AIBuilderMod implements ModInitializer {
         catch (Exception e) { return 0; }
 
         if (ACTIVE_BUILDS.contains(pid)) {
-            source.sendError(Text.literal("\u00a7c[AI Builder] Mar folyamatban van egy epites! Leallitashoz: /aicancel"));
+            source.sendError(Text.literal("\u00a7c[AI Builder] Mar folyamatban van egy epites! /aicancel"));
             return 0;
         }
-
         if (prompt.isBlank()) {
             source.sendError(Text.literal("\u00a7c[AI Builder] A prompt nem lehet ures! Pelda: /ai epits egy hazat"));
             return 0;
@@ -115,8 +108,7 @@ public class AIBuilderMod implements ModInitializer {
         if (cfg.openrouter == null || cfg.openrouter.apiKey == null
             || cfg.openrouter.apiKey.isBlank() || cfg.openrouter.apiKey.contains("PUT_YOUR")) {
             source.sendError(Text.literal(
-                "\u00a7c[AI Builder] OpenRouter API kulcs nincs beallitva! " +
-                "Nyomd meg B-t, vagy szerkeszd: .minecraft/config/ai-builder.json"));
+                "\u00a7c[AI Builder] API kulcs nincs beallitva! Nyomd meg B-t a confighoz."));
             return 0;
         }
 
@@ -132,7 +124,7 @@ public class AIBuilderMod implements ModInitializer {
         ), false);
         if (!hasDisp) {
             source.sendFeedback(() -> Text.literal(
-                "\u00a77[AI Builder] Tipp: /aidisplay paranccsal lerakhatod a progress kijelzot magad ele!"
+                "\u00a77Tipp: /aidisplay paranccsal lerakhatod a progress kijelzot!"
             ), false);
         }
 
@@ -165,18 +157,10 @@ public class AIBuilderMod implements ModInitializer {
                 if (!ACTIVE_BUILDS.contains(pid)) return;
 
                 int placed = StructureBuilder.placePlan(source, plan);
-                int skipped = total - placed;
 
-                if (skipped > 0) {
-                    source.sendFeedback(() -> Text.literal(
-                        "\u00a7a[AI Builder] Kesz! " + placed + "/" + total +
-                        " blokk (" + skipped + " kihagyva) | /aiundo"
-                    ), false);
-                } else {
-                    source.sendFeedback(() -> Text.literal(
-                        "\u00a7a[AI Builder] \u2714 Kesz! " + placed + " blokk | /aiundo"
-                    ), false);
-                }
+                source.sendFeedback(() -> Text.literal(
+                    "\u00a7a[AI Builder] \u2714 Kesz! " + placed + "/" + total + " blokk lerakva | /aiundo"
+                ), false);
 
             } catch (Exception e) {
                 LOGGER.error("[AI Builder] Epites kozben hiba", e);
@@ -184,8 +168,15 @@ public class AIBuilderMod implements ModInitializer {
                 for (String line : msg.split("\\n")) {
                     if (!line.isBlank()) source.sendError(Text.literal("\u00a7c[AI Builder] " + line));
                 }
+                // FIX: hiba eseten is frissitsuk a display-t
+                try {
+                    ServerPlayerEntity player = source.getPlayerOrThrow();
+                    ServerWorld world = (ServerWorld) player.getWorld();
+                    ProgressDisplayManager.finishDisplay(world, pid, 0, 0);
+                } catch (Exception ignored) {}
             } finally {
                 ACTIVE_BUILDS.remove(pid);
+                WandProgressTracker.clear(pid);
             }
         }, "AIBuilder-" + pid.substring(0, 8)).start();
         return 1;
@@ -193,9 +184,13 @@ public class AIBuilderMod implements ModInitializer {
 
     private int cancelBuild(ServerCommandSource source) {
         try {
-            String pid = source.getPlayerOrThrow().getUuidAsString();
+            ServerPlayerEntity player = source.getPlayerOrThrow();
+            String pid = player.getUuidAsString();
             if (ACTIVE_BUILDS.remove(pid)) {
                 WandProgressTracker.clear(pid);
+                // FIX: cancel eseten a display-t is frissitjuk, nem ragad bent
+                ServerWorld world = (ServerWorld) player.getWorld();
+                ProgressDisplayManager.finishDisplay(world, pid, -1, -1);
                 source.sendFeedback(() -> Text.literal("\u00a7c[AI Builder] Epites leallitva."), false);
             } else {
                 source.sendFeedback(() -> Text.literal("\u00a77[AI Builder] Nincs aktiv epites."), false);

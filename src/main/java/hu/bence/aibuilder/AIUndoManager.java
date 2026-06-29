@@ -7,20 +7,22 @@ import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class AIUndoManager {
     public record UndoEntry(BlockPos pos, BlockState oldState) {}
 
-    // Max 10 undo levels per player
     private static final int MAX_HISTORY = 10;
-    private static final Map<String, Deque<List<UndoEntry>>> HISTORY = new HashMap<>();
+    // FIX: ConcurrentHashMap - thread-safe, tobb szal irhat egyszerre
+    private static final Map<String, Deque<List<UndoEntry>>> HISTORY = new ConcurrentHashMap<>();
 
     public static void push(String pid, List<UndoEntry> entries) {
         if (entries.isEmpty()) return;
         Deque<List<UndoEntry>> stack = HISTORY.computeIfAbsent(pid, k -> new ArrayDeque<>());
-        stack.push(entries);
-        // Trim old history
-        while (stack.size() > MAX_HISTORY) stack.pollLast();
+        synchronized (stack) {
+            stack.push(entries);
+            while (stack.size() > MAX_HISTORY) stack.pollLast();
+        }
     }
 
     public static int undoLast(ServerCommandSource source) {
@@ -28,23 +30,28 @@ public class AIUndoManager {
             ServerPlayerEntity player = source.getPlayerOrThrow();
             Deque<List<UndoEntry>> stack = HISTORY.get(player.getUuidAsString());
             if (stack == null || stack.isEmpty()) {
-                source.sendError(Text.literal("[AI Builder] Nincs mit visszavonni."));
+                source.sendError(Text.literal("\u00a7c[AI Builder] Nincs mit visszavonni."));
                 return 0;
             }
-            List<UndoEntry> entries = stack.pop();
+            List<UndoEntry> entries;
+            synchronized (stack) {
+                entries = stack.pop();
+            }
+            int restored = 0;
             for (UndoEntry e : entries) {
-                // Safety: only undo within loaded chunks
                 if (player.getWorld().isChunkLoaded(e.pos().getX() >> 4, e.pos().getZ() >> 4)) {
                     player.getWorld().setBlockState(e.pos(), e.oldState(), 3);
+                    restored++;
                 }
             }
-            int remaining = stack.size();
+            final int r = restored;
+            final int remaining = stack.size();
             source.sendFeedback(() -> Text.literal(
-                "\u00a7a[AI Builder] Visszavonva: " + entries.size() + " blokk. Meg " + remaining + " visszavonhato lepés."
+                "\u00a7a[AI Builder] Visszavonva: " + r + " blokk. Meg " + remaining + " visszavonhato lepes."
             ), false);
             return 1;
         } catch (Exception e) {
-            source.sendError(Text.literal("[AI Builder] Csak jatekos hasznalhatja."));
+            source.sendError(Text.literal("\u00a7c[AI Builder] Csak jatekos hasznalhatja."));
             return 0;
         }
     }

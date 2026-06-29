@@ -13,6 +13,12 @@ public class ConfigManager {
     public static final Path CONFIG_DIR = FabricLoader.getInstance().getConfigDir();
     public static final Path CONFIG_FILE = CONFIG_DIR.resolve("ai-builder.json");
 
+    // FIX: kozponti limitek - ConfigScreen es ConfigManager ugyanezeket hasznalja
+    public static final int MAX_BLOCKS_LIMIT = 10000;
+    public static final int MAX_RADIUS_LIMIT  = 256;
+    public static final int MIN_BLOCKS        = 1;
+    public static final int MIN_RADIUS        = 1;
+
     public static void ensureConfig() {
         try {
             if (!Files.exists(CONFIG_DIR)) Files.createDirectories(CONFIG_DIR);
@@ -37,10 +43,10 @@ public class ConfigManager {
                 return new SimpleConfig();
             }
 
-            // Defaults
             if (cfg.provider == null || cfg.provider.isBlank()) cfg.provider = "openrouter";
-            if (cfg.maxBlocks <= 0) cfg.maxBlocks = 512;
-            if (cfg.maxRadius <= 0) cfg.maxRadius = 24;
+            // FIX: clamp kozponti limitekkel
+            if (cfg.maxBlocks <= 0 || cfg.maxBlocks > MAX_BLOCKS_LIMIT) cfg.maxBlocks = 512;
+            if (cfg.maxRadius <= 0 || cfg.maxRadius > MAX_RADIUS_LIMIT)  cfg.maxRadius = 24;
 
             if (cfg.openrouter == null) {
                 cfg.openrouter = new SimpleConfig.OpenRouterConfig(
@@ -54,10 +60,9 @@ public class ConfigManager {
             if (cfg.openrouter.model == null || cfg.openrouter.model.isBlank())
                 cfg.openrouter.model = "meta-llama/llama-3.3-8b-instruct:free";
 
-            // Auto-migracio: regi halott modellek csereje
             String m = cfg.openrouter.model;
             if (m.contains("gemini-2.0-flash-exp") || m.contains("gemini-pro")) {
-                AIBuilderMod.LOGGER.warn("[AI Builder] Regi/halott modell talalhato a configban: '{}' -> atallitva: meta-llama/llama-3.3-8b-instruct:free", m);
+                AIBuilderMod.LOGGER.warn("[AI Builder] Regi/halott modell '{}' -> atallitva: meta-llama/llama-3.3-8b-instruct:free", m);
                 cfg.openrouter.model = "meta-llama/llama-3.3-8b-instruct:free";
                 save(cfg);
             }
@@ -71,6 +76,9 @@ public class ConfigManager {
 
     public static void save(SimpleConfig cfg) {
         try {
+            // FIX: mentés előtt clamp, hogy ne kerüljön érvénytelen érték a fájlba
+            cfg.maxBlocks = Math.max(MIN_BLOCKS, Math.min(MAX_BLOCKS_LIMIT, cfg.maxBlocks));
+            cfg.maxRadius = Math.max(MIN_RADIUS, Math.min(MAX_RADIUS_LIMIT,  cfg.maxRadius));
             if (!Files.exists(CONFIG_DIR)) Files.createDirectories(CONFIG_DIR);
             Files.writeString(CONFIG_FILE, GSON.toJson(cfg));
             AIBuilderMod.LOGGER.info("[AI Builder] Config mentve: {}", CONFIG_FILE);
