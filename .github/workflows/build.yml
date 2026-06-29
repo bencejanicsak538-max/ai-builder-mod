@@ -28,12 +28,15 @@ jobs:
       - name: Build
         run: gradle build --no-daemon
 
+      - name: List build output
+        run: ls -la build/libs/
+
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
           name: ai-builder-mod
-          path: build/libs/ai-builder-*.jar
-          exclude: build/libs/*-sources.jar
+          path: |
+            build/libs/ai-builder-3.0.0.jar
           if-no-files-found: error
 
       - name: Delete old latest release
@@ -47,28 +50,43 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "AI Builder Mod v2.0 - Legfrissebb"
+          name: "AI Builder Mod v3.0.0 - Legfrissebb"
           body: |
-            ## AI Builder Mod v2.0
+            ## AI Builder Mod v3.0.0
             ### Telepites
-            1. Toltsd le az `ai-builder-2.0.0.jar` fajlt
+            1. Toltsd le az `ai-builder-3.0.0.jar` fajlt
             2. Tedd a `.minecraft/mods/` mappaba
             3. Kell meg: Fabric Loader 0.16.10 + Fabric API 0.92.2+1.20.1
             4. Inditsd el, nyomd meg **B** gombot a beallitasokhoz
 
-            ### Parancsok
+            ### Osszes parancs
             - `/ai <leiras>` - epites inditasa
-            - `/aiundo` - utolso epites visszavonasa (max 10 lepes)
+            - `/aiversion` - verzio, modell, config info
+            - `/aihelp` - osszes parancs listaja
+            - `/aiundo` - utolso epites visszavonasa (max 5 szint)
+            - `/aiundo list` - visszavonhato epitesek
             - `/aicancel` - aktiv epites leallitasa
             - `/aistatus` - folyamatban van-e epites
+            - `/aihistory` - utolso 10 epites
+            - `/aihistory rebuild <1-10>` - ujraepites history-bol
+            - `/aistyle` - aktualis stilus megtekintese
+            - `/aistyle medieval|modern|fantasy|nature|clear` - stilus beallitas
+            - `/aidebug` - API latency, blokk stat, log
+            - `/ailog` - raw JSON mentes fajlba
+            - `/aidisplay` - progress kijelzo
+            - `/aidisplay remove` - kijelzo eltavolitasa
 
-            ### Ujdonsagok v2.0-ban
-            - Auto-retry 429/halozati hiba eseten
-            - Flood protection (nem indithat 2 epitest egyszerre)
-            - /aicancel parancs
-            - Block state tamogatas
-            - Jobb hibauzenetek
-          files: build/libs/ai-builder-*.jar
+            ### Ujdonsagok v3.0.0-ban
+            - Teljesen ujrairt AI system prompt (strict JSON)
+            - Verzioszam minden menuben latható
+            - `/aiversion` parancs
+            - `/aihelp` - teljes parancs lista
+            - `/aihistory` + rebuild funkcio
+            - `/aistyle` stilusbeallitas
+            - `/aidebug` debug panel API latency-vel
+            - `/ailog` raw JSON mentes
+            - Jobb hibauzenetek es flood protection
+          files: build/libs/ai-builder-3.0.0.jar
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
