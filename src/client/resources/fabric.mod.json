@@ -6,9 +6,9 @@
   "description": "AI-alapu epitesi asszisztens Minecrafthoz.",
   "authors": ["Bence"],
   "license": "MIT",
-  "environment": "*",
+  "environment": "client",
   "entrypoints": {
-    "main": ["hu.bence.aibuilder.AIBuilderMod"]
+    "client": ["hu.bence.aibuilder.client.AIBuilderClient"]
   },
   "depends": {
     "fabricloader": ">=0.16.10",

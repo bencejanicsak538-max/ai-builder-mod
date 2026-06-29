@@ -1,15 +1,16 @@
 package hu.bence.aibuilder;
 
 public class BuildPlanParser {
-    public static BuildPlan parse(String json) {
-        String cleaned = json.trim();
-        if (cleaned.startsWith("```")) {
-            int first = cleaned.indexOf('\n');
-            int last = cleaned.lastIndexOf("```");
-            if (first > 0 && last > first) cleaned = cleaned.substring(first + 1, last).trim();
+    public static BuildPlan parse(String raw) {
+        String json = raw.trim();
+        if (json.contains("```")) {
+            int start = json.indexOf('{');
+            int end = json.lastIndexOf('}');
+            if (start >= 0 && end > start) json = json.substring(start, end + 1);
         }
-        BuildPlan plan = Json.GSON.fromJson(cleaned, BuildPlan.class);
-        if (plan == null || plan.blocks == null) throw new RuntimeException("\u00c9rv\u00e9nytelen AI v\u00e1lasz.");
+        BuildPlan plan = ConfigManager.GSON.fromJson(json, BuildPlan.class);
+        if (plan == null || plan.blocks == null || plan.blocks.isEmpty())
+            throw new RuntimeException("Az AI ervenytelen valaszt adott.");
         return plan;
     }
 }

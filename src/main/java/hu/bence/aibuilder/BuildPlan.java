@@ -5,12 +5,10 @@ import java.util.List;
 
 public class BuildPlan {
     public String originMode = "player";
-    public List<BlockInstruction> blocks = new ArrayList<>();
+    public List<BlockEntry> blocks = new ArrayList<>();
 
-    public static class BlockInstruction {
-        public int dx;
-        public int dy;
-        public int dz;
+    public static class BlockEntry {
+        public int dx, dy, dz;
         public String block;
     }
 }
