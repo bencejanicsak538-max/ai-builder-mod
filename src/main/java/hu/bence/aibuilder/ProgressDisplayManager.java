@@ -13,7 +13,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class ProgressDisplayManager {
 
-    // FIX: ConcurrentHashMap - thread-safe
     private static final Map<String, UUID> DISPLAYS = new ConcurrentHashMap<>();
 
     public static void spawnDisplay(ServerWorld world, ServerPlayerEntity player, BlockPos pos) {
@@ -44,42 +43,54 @@ public class ProgressDisplayManager {
         ), false);
     }
 
+    /**
+     * FIX: setCustomName() szerver foszerladon fut - world.getServer().execute() hasznalatával
+     * Nélküle a hattérszálról hívott frissítés csendben meghiúsult.
+     */
     public static void updateDisplay(ServerWorld world, String playerUuid, int placed, int total) {
         UUID standUuid = DISPLAYS.get(playerUuid);
         if (standUuid == null) return;
-        net.minecraft.entity.Entity ent = world.getEntity(standUuid);
-        if (!(ent instanceof ArmorStandEntity stand)) return;
 
         int pct = total > 0 ? (placed * 100 / total) : 0;
         String bar = StructureBuilder.buildBar(pct);
-        stand.setCustomName(Text.literal(
-            "\u00a7e[AI Builder] " + bar + " " + pct + "% | " + placed + "/" + total
-        ));
+        String label = "\u00a7e[AI Builder] " + bar + " " + pct + "% | " + placed + "/" + total;
+
+        // Szerver foszalra utemezve - szálbiztos entitás módosítás
+        world.getServer().execute(() -> {
+            net.minecraft.entity.Entity ent = world.getEntity(standUuid);
+            if (ent instanceof ArmorStandEntity stand) {
+                stand.setCustomName(Text.literal(label));
+            }
+        });
     }
 
     public static void finishDisplay(ServerWorld world, String playerUuid, int placed, int total) {
         UUID standUuid = DISPLAYS.get(playerUuid);
         if (standUuid == null) return;
-        net.minecraft.entity.Entity ent = world.getEntity(standUuid);
-        if (!(ent instanceof ArmorStandEntity stand)) return;
 
-        // FIX: cancel eset (placed == -1) kulonbozo uzenet
+        String label;
         if (placed < 0) {
-            stand.setCustomName(Text.literal(
-                "\u00a7c[AI Builder] \u2716 Leallitva | /ai <prompt> uj epiteshez"
-            ));
+            label = "\u00a7c[AI Builder] \u2716 Leallitva | /ai <prompt> uj epiteshez";
         } else {
-            stand.setCustomName(Text.literal(
-                "\u00a7a[AI Builder] \u2714 KESZ! " + placed + "/" + total + " blokk | /aiundo"
-            ));
+            label = "\u00a7a[AI Builder] \u2714 KESZ! " + placed + "/" + total + " blokk | /aiundo";
         }
+
+        world.getServer().execute(() -> {
+            net.minecraft.entity.Entity ent = world.getEntity(standUuid);
+            if (ent instanceof ArmorStandEntity stand) {
+                stand.setCustomName(Text.literal(label));
+            }
+        });
     }
 
     public static void removeDisplay(ServerWorld world, String playerUuid) {
         UUID standUuid = DISPLAYS.remove(playerUuid);
         if (standUuid == null) return;
-        net.minecraft.entity.Entity ent = world.getEntity(standUuid);
-        if (ent != null) ent.discard();
+        // remove is foszerladon biztos
+        world.getServer().execute(() -> {
+            net.minecraft.entity.Entity ent = world.getEntity(standUuid);
+            if (ent != null) ent.discard();
+        });
     }
 
     public static boolean hasDisplay(String playerUuid) {
