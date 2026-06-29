@@ -5,7 +5,6 @@ import com.google.gson.*;
 public class OpenRouterClient {
 
     public static String generate(String prompt, SimpleConfig cfg) throws Exception {
-        // Validaciok reszletes uzenetekkel
         if (cfg.openrouter == null)
             throw new RuntimeException(
                 "OpenRouter config hianyzik a config fajlbol! " +
@@ -37,7 +36,6 @@ public class OpenRouterClient {
         if (url == null || url.isBlank())
             url = "https://openrouter.ai/api/v1/chat/completions";
 
-        // Request epitese
         JsonObject sysMsg = new JsonObject();
         sysMsg.addProperty("role", "system");
         sysMsg.addProperty("content", HttpUtil.SYSTEM_PROMPT);
@@ -54,13 +52,14 @@ public class OpenRouterClient {
         body.addProperty("model", model);
         body.add("messages", messages);
         body.addProperty("temperature", 0.2);
-        body.addProperty("max_tokens", 8192);
+        // FIX: 4096 a legtobb ingyenes modellnel a tényleges output limit
+        // 8192-t kérni amit a modell nem tud csak csonkítást okoz
+        body.addProperty("max_tokens", 4096);
 
         AIBuilderMod.LOGGER.info("[AI Builder] OpenRouter kerelem: modell='{}', url='{}'", model, url);
 
         String resp = HttpUtil.post(url, body.toString(), "Bearer " + key);
 
-        // JSON parse
         JsonObject root;
         try {
             root = JsonParser.parseString(resp).getAsJsonObject();
@@ -70,14 +69,12 @@ public class OpenRouterClient {
                 "Valasz: " + HttpUtil.truncate(resp, 400));
         }
 
-        // API szintu hiba ellenorzese
         if (root.has("error")) {
             JsonObject err = root.getAsJsonObject("error");
             String errMsg = err.has("message") ? err.get("message").getAsString() : "ismeretlen hiba";
             String errCode = err.has("code") ? err.get("code").toString() : "?";
             String errType = err.has("type") ? err.get("type").getAsString() : "";
 
-            // Metadata alapu extra info
             String metaInfo = "";
             if (err.has("metadata")) {
                 JsonElement meta = err.get("metadata");
@@ -98,7 +95,6 @@ public class OpenRouterClient {
                 "OpenRouter API hiba [kod: " + errCode + ", tipus: " + errType + "]: " + errMsg + metaInfo);
         }
 
-        // Valasz kibontasa
         try {
             JsonArray choices = root.getAsJsonArray("choices");
             if (choices == null || choices.size() == 0)
@@ -106,11 +102,16 @@ public class OpenRouterClient {
                     "Az OpenRouter valasz nem tartalmaz 'choices' mezot! " +
                     "Teljes valasz: " + HttpUtil.truncate(resp, 400));
 
-            JsonElement finishReason = choices.get(0).getAsJsonObject().get("finish_reason");
-            if (finishReason != null && finishReason.getAsString().equals("length"))
-                AIBuilderMod.LOGGER.warn("[AI Builder] A valasz max_tokens miatt le lett vagva! Probald egyszerubb epitmenynel.");
+            JsonObject choice = choices.get(0).getAsJsonObject();
 
-            String content = choices.get(0).getAsJsonObject()
+            // FIX: finish_reason=length eseten FIGYELMEZTET es megprobálja a részleges választ feldolgozni
+            JsonElement finishReasonEl = choice.get("finish_reason");
+            if (finishReasonEl != null && "length".equals(finishReasonEl.getAsString())) {
+                AIBuilderMod.LOGGER.warn("[AI Builder] FIGYELEM: A valasz token limit miatt le lett vagva! (finish_reason=length)");
+                // nem dobjuk el - megprobáljuk a csonka JSON-t is menteni a BuildPlanParser-rel
+            }
+
+            String content = choice
                 .get("message").getAsJsonObject()
                 .get("content").getAsString();
 
@@ -119,7 +120,10 @@ public class OpenRouterClient {
                     "Az AI ures valaszt adott vissza! " +
                     "Probald meg a promptot egyszerubben megfogalmazni.");
 
-            AIBuilderMod.LOGGER.info("[AI Builder] OpenRouter valasz megerkezett, hossz: {} karakter", content.length());
+            AIBuilderMod.LOGGER.info("[AI Builder] OpenRouter valasz: {} karakter, finish_reason={}",
+                content.length(),
+                finishReasonEl != null ? finishReasonEl.getAsString() : "?");
+
             return content;
 
         } catch (RuntimeException re) {
