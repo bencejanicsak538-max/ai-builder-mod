@@ -1,11 +1,11 @@
 package hu.bence.aibuilder;
 
 import net.minecraft.entity.decoration.ArmorStandEntity;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
 
 import java.util.Map;
 import java.util.UUID;
@@ -13,46 +13,46 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Lerakott "display" armor stand - lebego szoveggel mutatja az epites halalasat.
- * A jatekos /aidisplay paranccsal rak le egyet, es onnan latja a szazalekot.
+ * /aidisplay paranccsal rakja le a jatekos, real-time frissul blokkonkent.
  */
 public class ProgressDisplayManager {
 
-    // UUID (player) -> armor stand entity UUID
     private static final Map<String, UUID> DISPLAYS = new ConcurrentHashMap<>();
 
-    /** Letrehoz egy invisible, floating text armor stand-ot a megadott pozicioban. */
     public static void spawnDisplay(ServerWorld world, ServerPlayerEntity player, BlockPos pos) {
-        // Ha mar van, toroljuk
         removeDisplay(world, player.getUuidAsString());
 
-        ArmorStandEntity stand = new ArmorStandEntity(world, pos.getX() + 0.5, pos.getY() + 1.8, pos.getZ() + 0.5);
+        ArmorStandEntity stand = new ArmorStandEntity(world,
+            pos.getX() + 0.5, pos.getY() + 1.8, pos.getZ() + 0.5);
+
         stand.setInvisible(true);
         stand.setInvulnerable(true);
         stand.setNoGravity(true);
         stand.setCustomNameVisible(true);
-        stand.setCustomName(Text.literal("\u00a7e[AI Builder] Varo..."));
+        stand.setCustomName(Text.literal("\u00a7e[AI Builder] Varo az epitesre..."));
         stand.setSilent(true);
         stand.setShowArms(false);
         stand.setHideBasePlate(true);
-        stand.setMarker(true); // nem mozog, nem esik le
+
+        // Marker flag NBT-n keresztul (setMarker() private a Fabric 1.20.1 API-ban)
+        NbtCompound nbt = stand.writeNbt(new NbtCompound());
+        nbt.putBoolean("Marker", true);
+        stand.readNbt(nbt);
 
         world.spawnEntity(stand);
         DISPLAYS.put(player.getUuidAsString(), stand.getUuid());
 
         player.sendMessage(Text.literal(
-            "\u00a7a[AI Builder] Progress display lerakva! Inditsd el az epitest: /ai <prompt>"
+            "\u00a7a[AI Builder] Progress display lerakva! Inditsd el: /ai <prompt> | Eltavolit: /aidisplay remove"
         ), false);
 
-        AIBuilderMod.LOGGER.info("[AI Builder] Display armor stand spawned at {} for player {}",
+        AIBuilderMod.LOGGER.info("[AI Builder] Display spawned @ {} for {}",
             pos, player.getGameProfile().getName());
     }
 
-    /** Frissiti a lebego szoveget az epites soran (minden blokk utan hivva). */
     public static void updateDisplay(ServerWorld world, String playerUuid, int placed, int total) {
         UUID standUuid = DISPLAYS.get(playerUuid);
         if (standUuid == null) return;
-
-        world.getEntity(standUuid);
         net.minecraft.entity.Entity ent = world.getEntity(standUuid);
         if (!(ent instanceof ArmorStandEntity stand)) return;
 
@@ -63,20 +63,17 @@ public class ProgressDisplayManager {
         ));
     }
 
-    /** Vegso allapot: kesz! */
     public static void finishDisplay(ServerWorld world, String playerUuid, int placed, int total) {
         UUID standUuid = DISPLAYS.get(playerUuid);
         if (standUuid == null) return;
-
         net.minecraft.entity.Entity ent = world.getEntity(standUuid);
         if (!(ent instanceof ArmorStandEntity stand)) return;
 
         stand.setCustomName(Text.literal(
-            "\u00a7a[AI Builder] \u2714 KESZ! " + placed + "/" + total + " blokk | /aiundo visszavonashoz"
+            "\u00a7a[AI Builder] \u2714 KESZ! " + placed + "/" + total + " blokk | /aiundo"
         ));
     }
 
-    /** Torli a display-t (epites vegen, vagy /aicancel utan). */
     public static void removeDisplay(ServerWorld world, String playerUuid) {
         UUID standUuid = DISPLAYS.remove(playerUuid);
         if (standUuid == null) return;
