@@ -13,15 +13,14 @@ import net.minecraft.text.Text;
 @Environment(EnvType.CLIENT)
 public class ConfigScreen extends Screen {
     private final Screen parent;
-    private TextFieldWidget providerField;
-    private TextFieldWidget geminiKeyField;
     private TextFieldWidget openrouterKeyField;
+    private TextFieldWidget openrouterModelField;
     private TextFieldWidget maxBlocksField;
     private TextFieldWidget maxRadiusField;
     private SimpleConfig cfg;
 
     public ConfigScreen(Screen parent) {
-        super(Text.literal("\u00a7l AI Builder v2 - Beallitasok"));
+        super(Text.literal("\u00a7l AI Builder v2.1 - Beallitasok"));
         this.parent = parent;
     }
 
@@ -29,35 +28,29 @@ public class ConfigScreen extends Screen {
     protected void init() {
         cfg = ConfigManager.load();
         if (cfg == null) cfg = new SimpleConfig();
-        if (cfg.gemini == null) cfg.gemini = new SimpleConfig.Provider(
-            "PUT_KEY_HERE", "gemini-2.0-flash",
-            "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        );
-        if (cfg.openrouter == null) cfg.openrouter = new SimpleConfig.Provider(
-            "PUT_KEY_HERE", "google/gemini-2.0-flash-exp:free",
+        if (cfg.openrouter == null) cfg.openrouter = new SimpleConfig.OpenRouterConfig(
+            "PUT_YOUR_OPENROUTER_API_KEY_HERE",
+            "meta-llama/llama-3.3-8b-instruct:free",
             "https://openrouter.ai/api/v1/chat/completions"
         );
 
         int cx = this.width / 2;
         int y = 46;
-        int w = 280;
+        int w = 300;
 
-        // Provider
-        addLabel(cx, y - 10, w, "\u00a7eProvider: gemini \u00a77(ajanlott, ingyenes) \u00a7bvagy openrouter");
-        providerField = addField(cx, y, w, cfg.provider != null ? cfg.provider : "gemini", 32);
-        y += 34;
-
-        // Gemini Key
-        addLabel(cx, y - 10, w, "\u00a7bGemini API Key \u00a77(aistudio.google.com - ingyenes):");
-        geminiKeyField = addField(cx, y, w, cleanKey(cfg.gemini.apiKey), 256);
-        y += 34;
-
-        // OpenRouter Key
-        addLabel(cx, y - 10, w, "\u00a7aOpenRouter API Key \u00a77(openrouter.ai - ingyenes tier):");
+        // OpenRouter API Key
+        addLabel(cx, y - 10, w, "\u00a7aOpenRouter API Key \u00a77(szerezd meg: openrouter.ai/keys):");
         openrouterKeyField = addField(cx, y, w, cleanKey(cfg.openrouter.apiKey), 256);
         y += 34;
 
-        // Max blocks & radius on same row
+        // OpenRouter Model
+        addLabel(cx, y - 10, w, "\u00a7eOpenRouter Modell \u00a77(pl: meta-llama/llama-3.3-8b-instruct:free):");
+        openrouterModelField = addField(cx, y, w,
+            cfg.openrouter.model != null ? cfg.openrouter.model : "meta-llama/llama-3.3-8b-instruct:free",
+            128);
+        y += 34;
+
+        // Max blocks & radius
         addLabel(cx - 75, y - 10, 130, "\u00a77Max blokkok:");
         addLabel(cx + 75, y - 10, 130, "\u00a77Max sugar (blokk):");
         maxBlocksField = addFieldAt(cx - 75, y, 120, String.valueOf(cfg.maxBlocks), 6);
@@ -65,21 +58,20 @@ public class ConfigScreen extends Screen {
         y += 34;
 
         // Replace solid toggle
-        boolean replaceOn = cfg.allowReplaceSolid;
         addDrawableChild(ButtonWidget.builder(
-            Text.literal("Teli blokkok felulirasa: " + (replaceOn ? "\u00a7aBekapcsolt" : "\u00a7cKikapcsolt")),
+            Text.literal("Teli blokkok felulirasa: " + (cfg.allowReplaceSolid ? "\u00a7aBekapcsolt" : "\u00a7cKikapcsolt")),
             b -> {
                 cfg.allowReplaceSolid = !cfg.allowReplaceSolid;
                 b.setMessage(Text.literal("Teli blokkok felulirasa: " + (cfg.allowReplaceSolid ? "\u00a7aBekapcsolt" : "\u00a7cKikapcsolt")));
             }
-        ).dimensions(cx - 130, y, 260, 20).build());
+        ).dimensions(cx - 150, y, 300, 20).build());
         y += 28;
 
         // Save / Cancel
         addDrawableChild(ButtonWidget.builder(Text.literal("\u00a7a\u2714 Mentes"), b -> save())
-            .dimensions(cx - 130, y, 120, 20).build());
+            .dimensions(cx - 150, y, 140, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("\u00a7c\u2716 Megse"), b -> close())
-            .dimensions(cx + 10, y, 120, 20).build());
+            .dimensions(cx + 10, y, 140, 20).build());
     }
 
     private TextFieldWidget addField(int cx, int y, int w, String text, int maxLen) {
@@ -100,25 +92,19 @@ public class ConfigScreen extends Screen {
     }
 
     private String cleanKey(String k) {
-        return (k == null || k.contains("PUT_KEY") || k.isBlank()) ? "" : k;
+        return (k == null || k.contains("PUT_YOUR") || k.contains("PUT_KEY") || k.isBlank()) ? "" : k;
     }
 
     private void save() {
-        String prov = providerField.getText().trim().toLowerCase();
-        if (!prov.equals("gemini") && !prov.equals("openrouter")) {
-            if (client != null && client.player != null)
-                client.player.sendMessage(Text.literal("\u00a7c[AI Builder] Ervenytelen provider! Csak 'gemini' vagy 'openrouter' lehet."), false);
-            return;
-        }
-        cfg.provider = prov;
+        cfg.provider = "openrouter";
 
-        if (!geminiKeyField.getText().isBlank()) cfg.gemini.apiKey = geminiKeyField.getText().trim();
-        if (cfg.gemini.model == null || cfg.gemini.model.isBlank()) cfg.gemini.model = "gemini-2.0-flash";
-        if (cfg.gemini.url == null || cfg.gemini.url.isBlank())
-            cfg.gemini.url = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent";
+        String key = openrouterKeyField.getText().trim();
+        if (!key.isBlank()) cfg.openrouter.apiKey = key;
 
-        if (!openrouterKeyField.getText().isBlank()) cfg.openrouter.apiKey = openrouterKeyField.getText().trim();
-        if (cfg.openrouter.model == null || cfg.openrouter.model.isBlank()) cfg.openrouter.model = "google/gemini-2.0-flash-exp:free";
+        String model = openrouterModelField.getText().trim();
+        if (!model.isBlank()) cfg.openrouter.model = model;
+        else cfg.openrouter.model = "meta-llama/llama-3.3-8b-instruct:free";
+
         if (cfg.openrouter.url == null || cfg.openrouter.url.isBlank())
             cfg.openrouter.url = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -128,12 +114,22 @@ public class ConfigScreen extends Screen {
         try { cfg.maxRadius = Math.min(64, Math.max(1, Integer.parseInt(maxRadiusField.getText().trim()))); }
         catch (NumberFormatException ignored) { cfg.maxRadius = 24; }
 
+        // Validacio: kulcs formatum figyelmeztet
+        if (cfg.openrouter.apiKey != null && !cfg.openrouter.apiKey.isBlank()
+            && !cfg.openrouter.apiKey.startsWith("sk-or-")) {
+            if (client != null && client.player != null)
+                client.player.sendMessage(Text.literal(
+                    "\u00a7e[AI Builder] Figyelem: az OpenRouter kulcsok 'sk-or-' prefixszel kezdodnek. " +
+                    "Ellenorizd a kulcsot: openrouter.ai/keys"), false);
+        }
+
         ConfigManager.save(cfg);
         close();
+
         if (client != null && client.player != null)
             client.player.sendMessage(Text.literal(
-                "\u00a7a[AI Builder] Mentve! Provider: \u00a7e" + cfg.provider +
-                " \u00a77| Max: " + cfg.maxBlocks + " blokk, " + cfg.maxRadius + "bl sugar"
+                "\u00a7a[AI Builder] Mentve! Modell: \u00a7e" + cfg.openrouter.model +
+                " \u00a77| Max: " + cfg.maxBlocks + " blokk, " + cfg.maxRadius + " bl sugar"
             ), false);
     }
 
@@ -142,7 +138,7 @@ public class ConfigScreen extends Screen {
         renderBackground(ctx);
         ctx.drawCenteredTextWithShadow(textRenderer, title, width / 2, 12, 0xFFFFFF);
         ctx.drawCenteredTextWithShadow(textRenderer,
-            Text.literal("\u00a77Config fajl: config/ai-builder.json"),
+            Text.literal("\u00a77Provider: OpenRouter | config/ai-builder.json"),
             width / 2, 26, 0x888888);
         super.render(ctx, mx, my, delta);
     }
