@@ -2,6 +2,7 @@ package hu.bence.aibuilder;
 
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
 
 /**
  * AI provider routing - OpenRouter / Gemini / Ollama kozul valaszt a config alapjan.
@@ -28,13 +29,15 @@ public class AIProviderRouter {
         String result;
         int maxRetries = Math.max(1, cfg.retryCount);
         Exception lastEx = null;
+        final String finalPlayerUuid = playerUuid;
 
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 if (attempt > 1) {
-                    AIBuilderMod.LOGGER.info("[AI Builder] Ujraprobalkozas #{}", attempt);
-                    source.sendFeedback(() -> net.minecraft.text.Text.literal(
-                        "\u00a7e[AI Builder] Ujraprobalkozas " + attempt + "/" + maxRetries + "..."
+                    final int a = attempt;
+                    AIBuilderMod.LOGGER.info("[AI Builder] Ujraprobalkozas #{}", a);
+                    source.sendFeedback(() -> Text.literal(
+                        "\u00a7e[AI Builder] Ujraprobalkozas " + a + "/" + maxRetries + "..."
                     ), false);
                     Thread.sleep(1500);
                 }
@@ -46,7 +49,6 @@ public class AIProviderRouter {
                     default -> throw new RuntimeException("Ismeretlen provider: '" + cfg.provider + "'");
                 };
 
-                // Ellenorizzuk hogy valid-e a JSON mielott visszaadjuk
                 try {
                     BuildPlanParser.parse(result);
                     if (attempt > 1) {
@@ -55,8 +57,8 @@ public class AIProviderRouter {
                 } catch (Exception parseEx) {
                     if (attempt < maxRetries) {
                         AIBuilderMod.LOGGER.warn("[AI Builder] Parse hiba, ujraproba: {}", parseEx.getMessage());
-                        if (playerUuid != null) {
-                            BuildStats.Stats s = BuildStats.get(playerUuid);
+                        if (finalPlayerUuid != null) {
+                            BuildStats.Stats s = BuildStats.get(finalPlayerUuid);
                             if (s != null) s.retryCount++;
                         }
                         lastEx = parseEx;
@@ -64,12 +66,11 @@ public class AIProviderRouter {
                     }
                 }
 
-                if (playerUuid != null) DebugLogger.saveRawJson(playerUuid, result);
+                if (finalPlayerUuid != null) DebugLogger.saveRawJson(finalPlayerUuid, result);
                 return result;
 
             } catch (RuntimeException re) {
                 lastEx = re;
-                // API hibaknal nem probalkozunk ujra
                 if (re.getMessage() != null && (
                     re.getMessage().contains("HTTP 401") ||
                     re.getMessage().contains("HTTP 403") ||
@@ -79,8 +80,8 @@ public class AIProviderRouter {
                 }
                 if (attempt < maxRetries) {
                     AIBuilderMod.LOGGER.warn("[AI Builder] Hiba {}/{}: {}", attempt, maxRetries, re.getMessage());
-                    if (playerUuid != null) {
-                        BuildStats.Stats s = BuildStats.get(playerUuid);
+                    if (finalPlayerUuid != null) {
+                        BuildStats.Stats s = BuildStats.get(finalPlayerUuid);
                         if (s != null) s.retryCount++;
                     }
                 } else throw re;
