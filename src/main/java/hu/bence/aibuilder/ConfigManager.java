@@ -11,7 +11,6 @@ import java.nio.file.Path;
 public class ConfigManager {
     public static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    // Use Fabric's proper config directory
     public static final Path CONFIG_DIR = FabricLoader.getInstance().getConfigDir();
     public static final Path CONFIG_FILE = CONFIG_DIR.resolve("ai-builder.json");
 
@@ -36,15 +35,21 @@ public class ConfigManager {
             SimpleConfig cfg = GSON.fromJson(Files.readString(CONFIG_FILE), SimpleConfig.class);
             if (cfg == null) return new SimpleConfig();
             // Fill in missing fields with defaults
-            if (cfg.provider == null || cfg.provider.isBlank()) cfg.provider = "gemini";
+            if (cfg.provider == null || cfg.provider.isBlank()) cfg.provider = "openrouter";
             if (cfg.gemini == null) cfg.gemini = new SimpleConfig.Provider(
                 "PUT_KEY_HERE", "gemini-2.0-flash",
                 "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             );
             if (cfg.openrouter == null) cfg.openrouter = new SimpleConfig.Provider(
-                "PUT_KEY_HERE", "google/gemini-2.0-flash-exp:free",
+                "PUT_KEY_HERE", "meta-llama/llama-3.3-8b-instruct:free",
                 "https://openrouter.ai/api/v1/chat/completions"
             );
+            // Fix: ha a config meg a regi halott modellt tartalmazza, automatikusan frissitjuk
+            if ("google/gemini-2.0-flash-exp:free".equals(cfg.openrouter.model)) {
+                cfg.openrouter.model = "meta-llama/llama-3.3-8b-instruct:free";
+                AIBuilderMod.LOGGER.warn("[AI Builder] Regi/halott OpenRouter modell eszlelve, automatikusan frissitve: meta-llama/llama-3.3-8b-instruct:free");
+                save(cfg);
+            }
             if (cfg.maxBlocks <= 0) cfg.maxBlocks = 512;
             if (cfg.maxRadius <= 0) cfg.maxRadius = 24;
             return cfg;
