@@ -78,7 +78,8 @@ public class DebugLogger {
         String json = LAST_RAW_JSON.get(playerUuid);
         if (json == null || json.isBlank()) return false;
         try {
-            Path logDir = server.getRunDirectory().resolve("config").resolve("ai-builder-logs");
+            // getRunDirectory() File-t ad vissza Fabric-ban, .toPath()-szal konvertaljuk
+            Path logDir = server.getRunDirectory().toPath().resolve("config").resolve("ai-builder-logs");
             Files.createDirectories(logDir);
             String filename = "ai-log-" + playerName + "-" + System.currentTimeMillis() + ".json";
             Path file = logDir.resolve(filename);
