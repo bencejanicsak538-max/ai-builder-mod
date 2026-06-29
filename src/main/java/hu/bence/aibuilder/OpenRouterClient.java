@@ -22,7 +22,15 @@ public class OpenRouterClient {
         body.add("messages", messages);
         body.addProperty("temperature", 0.1);
 
-        String resp = HttpUtil.post(cfg.openrouter.url, body.toString(), "Bearer " + key);
+        String resp;
+        try {
+            resp = HttpUtil.post(cfg.openrouter.url, body.toString(), "Bearer " + key);
+        } catch (Exception e) {
+            if (e.getMessage() != null && e.getMessage().contains("429")) {
+                throw new RuntimeException("Az AI tul van terhelve (429). Varj 10 masodpercet es probalj ujra, vagy valts Gemini-re (B gomb).");
+            }
+            throw e;
+        }
         JsonObject root = JsonParser.parseString(resp).getAsJsonObject();
         return root.getAsJsonArray("choices").get(0).getAsJsonObject()
             .get("message").getAsJsonObject()

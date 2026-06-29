@@ -34,11 +34,11 @@ public class ConfigScreen extends Screen {
         int y = 50;
         int w = 300;
 
-        addLabel(cx, y - 12, w, "\u00a7eProvider: gemini / openrouter / ollama");
+        addLabel(cx, y - 12, w, "\u00a7eProvider: gemini (ajanlott) / openrouter");
         providerField = addField(cx, y, w, cfg.provider != null ? cfg.provider : "gemini", 32);
         y += 36;
 
-        addLabel(cx, y - 12, w, "\u00a7bGemini API Key:");
+        addLabel(cx, y - 12, w, "\u00a7bGemini API Key (ingyenes, ajanlott):");
         geminiKeyField = addField(cx, y, w, cleanKey(cfg.gemini.apiKey), 256);
         y += 36;
 
@@ -72,11 +72,11 @@ public class ConfigScreen extends Screen {
     private void save() {
         cfg.provider = providerField.getText().trim();
         if (!geminiKeyField.getText().isBlank()) cfg.gemini.apiKey = geminiKeyField.getText().trim();
-        if (cfg.gemini.model == null) cfg.gemini.model = "gemini-2.0-flash";
-        if (cfg.gemini.url == null) cfg.gemini.url = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent";
+        if (cfg.gemini.model == null || cfg.gemini.model.isBlank()) cfg.gemini.model = "gemini-2.0-flash";
+        if (cfg.gemini.url == null || cfg.gemini.url.isBlank()) cfg.gemini.url = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent";
         if (!openrouterKeyField.getText().isBlank()) cfg.openrouter.apiKey = openrouterKeyField.getText().trim();
-        if (cfg.openrouter.model == null) cfg.openrouter.model = "meta-llama/llama-3.3-70b-instruct:free";
-        if (cfg.openrouter.url == null) cfg.openrouter.url = "https://openrouter.ai/api/v1/chat/completions";
+        if (cfg.openrouter.model == null || cfg.openrouter.model.isBlank()) cfg.openrouter.model = "google/gemini-2.0-flash-exp:free";
+        if (cfg.openrouter.url == null || cfg.openrouter.url.isBlank()) cfg.openrouter.url = "https://openrouter.ai/api/v1/chat/completions";
         ConfigManager.save(cfg);
         close();
         if (client != null && client.player != null)
