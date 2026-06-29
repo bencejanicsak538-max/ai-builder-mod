@@ -18,11 +18,13 @@ import java.util.Optional;
 
 public class StructureBuilder {
 
-    public static final long DELAY_PER_BLOCK_MS = 60L;
+    public static long DELAY_PER_BLOCK_MS = 60L; // configbol felulirjuk
     private static final int PROGRESS_EVERY = 10;
 
-    public static int placePlan(ServerCommandSource source, BuildPlan plan) throws Exception {
+    public static int placePlan(ServerCommandSource source, BuildPlan plan, String prompt) throws Exception {
         SimpleConfig cfg = ConfigManager.load();
+        DELAY_PER_BLOCK_MS = Math.max(0, cfg.buildSpeedMs);
+
         ServerPlayerEntity player = source.getPlayerOrThrow();
         ServerWorld world = (ServerWorld) player.getWorld();
         BlockPos origin = player.getBlockPos();
@@ -31,9 +33,16 @@ public class StructureBuilder {
         int skipped = 0;
         int total = plan.blocks.size();
 
+        // Preview torles ha volt
+        PreviewManager.clearPreview(world, player.getUuidAsString());
+
+        BuildStats.Stats stats = BuildStats.get(player.getUuidAsString());
+        if (stats != null) stats.buildStartMs = System.currentTimeMillis();
+
         for (BuildPlan.BlockEntry b : plan.blocks) {
             if (!AIBuilderMod.ACTIVE_BUILDS.contains(player.getUuidAsString())) {
-                source.sendFeedback(() -> net.minecraft.text.Text.literal("\u00a7c[AI Builder] Epites megszakitva."), false);
+                source.sendFeedback(() -> net.minecraft.text.Text.literal(
+                    "\u00a7c[AI Builder] Epites megszakitva."), false);
                 break;
             }
 
@@ -46,7 +55,10 @@ public class StructureBuilder {
             if (b.block == null || b.block.isBlank()) { skipped++; continue; }
             String blockId = b.block.contains(":") ? b.block : "minecraft:" + b.block;
             Identifier id = Identifier.tryParse(blockId);
-            if (id == null || !Registries.BLOCK.containsId(id)) { skipped++; continue; }
+            if (id == null || !Registries.BLOCK.containsId(id)) {
+                AIBuilderMod.LOGGER.warn("[AI Builder] Ismeretlen blokk ID kihagyva: '{}'", blockId);
+                skipped++; continue;
+            }
 
             Block block = Registries.BLOCK.get(id);
             BlockPos pos = origin.add(b.dx, b.dy, b.dz);
@@ -74,10 +86,18 @@ public class StructureBuilder {
                 ), false);
             }
 
-            try { Thread.sleep(DELAY_PER_BLOCK_MS); } catch (InterruptedException e) { break; }
+            if (DELAY_PER_BLOCK_MS > 0) {
+                try { Thread.sleep(DELAY_PER_BLOCK_MS); } catch (InterruptedException e) { break; }
+            }
         }
 
-        AIUndoManager.push(player.getUuidAsString(), undo);
+        if (stats != null) {
+            stats.placedBlocks = placed;
+            stats.skippedBlocks = skipped;
+            stats.buildEndMs = System.currentTimeMillis();
+        }
+
+        AIUndoManager.push(player.getUuidAsString(), undo, prompt);
         WandProgressTracker.finish(player.getUuidAsString());
         ProgressDisplayManager.finishDisplay(world, player.getUuidAsString(), placed, total);
 
@@ -89,6 +109,11 @@ public class StructureBuilder {
         }
 
         return placed;
+    }
+
+    /** Visszafele kompatibilis - prompt nelkul */
+    public static int placePlan(ServerCommandSource source, BuildPlan plan) throws Exception {
+        return placePlan(source, plan, "(ismeretlen)");
     }
 
     private static void spawnPlaceParticle(ServerWorld world, BlockPos pos) {

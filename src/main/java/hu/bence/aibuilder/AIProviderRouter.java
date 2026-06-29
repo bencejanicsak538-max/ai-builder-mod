@@ -1,95 +1,92 @@
 package hu.bence.aibuilder;
 
 import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.text.Text;
+import net.minecraft.server.network.ServerPlayerEntity;
 
+/**
+ * AI provider routing - OpenRouter / Gemini / Ollama kozul valaszt a config alapjan.
+ * v3.0: kontextus + stilus atadasa a generatornak, retry logika.
+ */
 public class AIProviderRouter {
-
-    private static final int MAX_RETRIES = 3;
-    private static final long BASE_RETRY_DELAY_MS = 5000L;
-    private static final long RATE_LIMIT_DELAY_MS = 30000L;
 
     public static String requestBuildPlan(String prompt, ServerCommandSource source) throws Exception {
         SimpleConfig cfg = ConfigManager.load();
-        String provider = cfg.provider != null ? cfg.provider.toLowerCase().trim() : "openrouter";
+        String playerUuid = null;
+        ContextCollector.Context ctx = null;
+        String styleExtra = null;
 
-        if (!provider.equals("openrouter")) {
-            throw new RuntimeException(
-                "Ismeretlen provider: '" + provider + "'. " +
-                "Csak 'openrouter' tamogatott. " +
-                "Javitsd a .minecraft/config/ai-builder.json fajlban.");
-        }
+        try {
+            ServerPlayerEntity player = source.getPlayerOrThrow();
+            playerUuid = player.getUuidAsString();
+            ctx = ContextCollector.collect(player);
+            styleExtra = StyleManager.getPromptExtra(playerUuid, cfg);
 
-        Exception lastException = null;
+            String style = StyleManager.getStyle(playerUuid, cfg);
+            AIBuilderMod.LOGGER.info("[AI Builder] Kontextus: biome={}, stilus={}", ctx.biomeId, style);
+        } catch (Exception ignored) {}
 
-        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-            // Megszakitas ellenorzese
-            try {
-                String pid = source.getPlayerOrThrow().getUuidAsString();
-                if (!AIBuilderMod.ACTIVE_BUILDS.contains(pid)) {
-                    throw new RuntimeException("Epites megszakitva.");
-                }
-            } catch (RuntimeException re) {
-                if (re.getMessage() != null && re.getMessage().contains("megszakitva")) throw re;
-            }
+        String result;
+        int maxRetries = Math.max(1, cfg.retryCount);
+        Exception lastEx = null;
 
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 if (attempt > 1) {
-                    final int a = attempt;
-                    source.sendFeedback(() -> Text.literal(
-                        "\u00a77[AI Builder] Ujraprobalkozas (" + a + "/" + MAX_RETRIES + ")..."
+                    AIBuilderMod.LOGGER.info("[AI Builder] Ujraprobalkozas #{}", attempt);
+                    source.sendFeedback(() -> net.minecraft.text.Text.literal(
+                        "\u00a7e[AI Builder] Ujraprobalkozas " + attempt + "/" + maxRetries + "..."
                     ), false);
+                    Thread.sleep(1500);
                 }
 
-                return OpenRouterClient.generate(prompt, cfg);
+                result = switch (cfg.provider.toLowerCase()) {
+                    case "openrouter" -> OpenRouterClient.generate(prompt, cfg, ctx, styleExtra);
+                    case "gemini" -> GeminiClient.generate(prompt, cfg);
+                    case "ollama" -> OllamaClient.generate(prompt, cfg);
+                    default -> throw new RuntimeException("Ismeretlen provider: '" + cfg.provider + "'");
+                };
 
-            } catch (Exception e) {
-                lastException = e;
-                String msg = e.getMessage() != null ? e.getMessage() : "Ismeretlen hiba";
-
-                // Ne probalkozzon ujra: config/kulcs hiba, megszakitas, nem letező modell
-                boolean isFatal = msg.contains("megszakitva")
-                    || msg.contains("API kulcs")
-                    || msg.contains("PUT_YOUR")
-                    || msg.contains("sk-or-")
-                    || msg.contains("NEM LETEZIK")
-                    || msg.contains("Ismeretlen provider")
-                    || msg.contains("401")
-                    || msg.contains("402")
-                    || msg.contains("403")
-                    || msg.contains("404");
-
-                if (isFatal) throw e;
-
-                boolean is429 = msg.contains("429") || msg.contains("Rate limit");
-                boolean isNetwork = msg.contains("timed out") || msg.contains("Connection") || msg.contains("SocketTimeout") || msg.contains("idotullepes");
-                boolean isServer = msg.contains("500") || msg.contains("502") || msg.contains("503") || msg.contains("504");
-
-                if ((is429 || isNetwork || isServer) && attempt < MAX_RETRIES) {
-                    long delay = is429 ? RATE_LIMIT_DELAY_MS : BASE_RETRY_DELAY_MS;
-                    final int a = attempt;
-                    final long d = delay;
-                    source.sendFeedback(() -> Text.literal(
-                        "\u00a7c[AI Builder] Hiba (" + a + "/" + MAX_RETRIES + "): "
-                        + summarize(msg) + " - " + (d / 1000) + " mp mulva ujra..."
-                    ), false);
-                    try { Thread.sleep(delay); } catch (InterruptedException ignored) {}
-                    continue;
+                // Ellenorizzuk hogy valid-e a JSON mielott visszaadjuk
+                try {
+                    BuildPlanParser.parse(result);
+                    if (attempt > 1) {
+                        AIBuilderMod.LOGGER.info("[AI Builder] Sikeres {} nekifutasra", attempt);
+                    }
+                } catch (Exception parseEx) {
+                    if (attempt < maxRetries) {
+                        AIBuilderMod.LOGGER.warn("[AI Builder] Parse hiba, ujraproba: {}", parseEx.getMessage());
+                        if (playerUuid != null) {
+                            BuildStats.Stats s = BuildStats.get(playerUuid);
+                            if (s != null) s.retryCount++;
+                        }
+                        lastEx = parseEx;
+                        continue;
+                    }
                 }
 
-                throw e;
+                if (playerUuid != null) DebugLogger.saveRawJson(playerUuid, result);
+                return result;
+
+            } catch (RuntimeException re) {
+                lastEx = re;
+                // API hibaknal nem probalkozunk ujra
+                if (re.getMessage() != null && (
+                    re.getMessage().contains("HTTP 401") ||
+                    re.getMessage().contains("HTTP 403") ||
+                    re.getMessage().contains("HTTP 404") ||
+                    re.getMessage().contains("API kulcs"))) {
+                    throw re;
+                }
+                if (attempt < maxRetries) {
+                    AIBuilderMod.LOGGER.warn("[AI Builder] Hiba {}/{}: {}", attempt, maxRetries, re.getMessage());
+                    if (playerUuid != null) {
+                        BuildStats.Stats s = BuildStats.get(playerUuid);
+                        if (s != null) s.retryCount++;
+                    }
+                } else throw re;
             }
         }
-
-        throw lastException != null ? lastException : new RuntimeException("Minden ujraprobalkozas sikertelen.");
-    }
-
-    private static String summarize(String msg) {
-        if (msg.contains("429") || msg.contains("Rate limit")) return "Rate limit (429) - tulterhelt";
-        if (msg.contains("timed out") || msg.contains("idotullepes")) return "Idotullepes";
-        if (msg.contains("Connection")) return "Halozati kapcsolodasi hiba";
-        if (msg.contains("500")) return "Szerver belso hiba (500)";
-        if (msg.contains("502") || msg.contains("503") || msg.contains("504")) return "Szerver nem erheto el";
-        return msg.length() > 80 ? msg.substring(0, 80) + "..." : msg;
+        if (lastEx != null) throw lastEx;
+        throw new RuntimeException("Ismeretlen hiba az AI keresnel.");
     }
 }
