@@ -20,10 +20,10 @@ jobs:
           distribution: 'temurin'
 
       - name: Make gradlew executable
-        run: chmod +x ./gradlew
+        run: chmod +x gradlew
 
       - name: Build with Gradle Wrapper
-        run: ./gradlew build
+        run: bash gradlew build
 
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
@@ -44,13 +44,27 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "AI Builder Mod - Legfrissebb"
+          name: "AI Builder Mod v2.0 - Legfrissebb"
           body: |
-            ## Telepites
-            1. Toltsd le az `ai-builder-1.0.0.jar` fajlt
+            ## AI Builder Mod v2.0
+            ### Telepites
+            1. Toltsd le az `ai-builder-2.0.0.jar` fajlt
             2. Tedd a `.minecraft/mods/` mappaba
-            3. Kell meg: Fabric Loader 0.16.10 + Fabric API 1.20.1
-            4. Inditsd el a Minecraftot, nyomd meg **B** gombot a kulcsok beallitasahoz
+            3. Kell meg: Fabric Loader 0.16.10 + Fabric API 0.92.2+1.20.1
+            4. Inditsd el, nyomd meg **B** gombot a beallitasokhoz
+
+            ### Parancsok
+            - `/ai <leiras>` - epites inditasa
+            - `/aiundo` - utolso epites visszavonasa (max 10 lepes)
+            - `/aicancel` - aktiv epites leallitasa
+            - `/aistatus` - folyamatban van-e epites
+
+            ### Ujdonsagok v2.0-ban
+            - Auto-retry 429/halozati hiba eseten
+            - Flood protection (nem indithat 2 epitest egyszerre)
+            - /aicancel parancs
+            - Block state tamogatas
+            - Jobb hibauzenetek
           files: build/libs/ai-builder-*.jar
           prerelease: false
         env:
