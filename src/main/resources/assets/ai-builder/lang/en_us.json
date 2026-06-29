@@ -1,4 +1,4 @@
 {
-  "key.ai_builder.open_config": "Open AI Builder Config",
-  "category.ai_builder": "AI Builder"
+  "item.ai-builder.ai_wand": "AI Wand",
+  "item.ai-builder.ai_wand.desc": "Right-click to see AI build progress"
 }

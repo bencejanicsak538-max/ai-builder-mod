@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "  G",
+    " B ",
+    "S  "
+  ],
+  "key": {
+    "G": { "item": "minecraft:gold_ingot" },
+    "B": { "item": "minecraft:blaze_rod" },
+    "S": { "item": "minecraft:stick" }
+  },
+  "result": {
+    "item": "ai-builder:ai_wand",
+    "count": 1
+  }
+}
