@@ -15,14 +15,17 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AIBuilderMod implements ModInitializer {
     public static final String MOD_ID = "ai-builder";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
-
-    // Players currently running a build - prevents spam/duplicate requests
     public static final Set<String> ACTIVE_BUILDS = ConcurrentHashMap.newKeySet();
 
     @Override
     public void onInitialize() {
         ConfigManager.ensureConfig();
-        LOGGER.info("[AI Builder] v2.0 betoltve!");
+        SimpleConfig cfg = ConfigManager.load();
+        LOGGER.info("[AI Builder] v2.1 betoltve! Provider: {}, Modell: {}, MaxBlokk: {}, MaxSugar: {}",
+            cfg.provider,
+            cfg.openrouter != null ? cfg.openrouter.model : "N/A",
+            cfg.maxBlocks,
+            cfg.maxRadius);
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 
@@ -46,10 +49,9 @@ public class AIBuilderMod implements ModInitializer {
     }
 
     private int executeAI(ServerCommandSource source, String prompt) {
-        // Must be a player
         try { source.getPlayerOrThrow(); }
         catch (Exception e) {
-            source.sendError(Text.literal("[AI Builder] Csak jatekos hasznalhatja ezt a parancsot!"));
+            source.sendError(Text.literal("\u00a7c[AI Builder] Csak jatekos hasznalhatja ezt a parancsot!"));
             return 0;
         }
 
@@ -57,45 +59,95 @@ public class AIBuilderMod implements ModInitializer {
         try { pid = source.getPlayerOrThrow().getUuidAsString(); }
         catch (Exception e) { return 0; }
 
-        // Flood protection: max 1 active build per player
         if (ACTIVE_BUILDS.contains(pid)) {
-            source.sendError(Text.literal("[AI Builder] Mar folyamatban van egy epites! Hasznald /aicancel parancsot."));
+            source.sendError(Text.literal("\u00a7c[AI Builder] Mar folyamatban van egy epites! Leallitashoz: /aicancel"));
             return 0;
         }
 
-        // Input validation
-        if (prompt.isBlank() || prompt.length() > 500) {
-            source.sendError(Text.literal("[AI Builder] A prompt nem lehet ures, es max 500 karakter!"));
+        if (prompt.isBlank()) {
+            source.sendError(Text.literal("\u00a7c[AI Builder] A prompt nem lehet ures! Pelda: /ai epits egy hazat"));
+            return 0;
+        }
+        if (prompt.length() > 500) {
+            source.sendError(Text.literal("\u00a7c[AI Builder] A prompt tul hosszu! Max 500 karakter (jelenlegi: " + prompt.length() + ")"));
+            return 0;
+        }
+
+        // Config ellenorzese elore, hogy ne kelljen varni az AI valaszara
+        SimpleConfig cfg = ConfigManager.load();
+        if (cfg.openrouter == null || cfg.openrouter.apiKey == null
+            || cfg.openrouter.apiKey.isBlank() || cfg.openrouter.apiKey.contains("PUT_YOUR")) {
+            source.sendError(Text.literal(
+                "\u00a7c[AI Builder] OpenRouter API kulcs nincs beallitva! " +
+                "Nyomd meg B-t, vagy szerkeszd: .minecraft/config/ai-builder.json"));
             return 0;
         }
 
         ACTIVE_BUILDS.add(pid);
         source.sendFeedback(() -> Text.literal("\u00a7e[AI Builder] Kereses: " + prompt), false);
-        source.sendFeedback(() -> Text.literal("\u00a77[AI Builder] Gondolkodok... (leallitas: /aicancel)"), false);
+        source.sendFeedback(() -> Text.literal(
+            "\u00a77[AI Builder] Gondolkodok... | Provider: openrouter | Modell: " +
+            (cfg.openrouter != null ? cfg.openrouter.model : "N/A") +
+            " | Leallitas: /aicancel"
+        ), false);
 
         new Thread(() -> {
             try {
-                // Step 1: get build plan
+                // 1. AI terv lekerese
                 String json = AIProviderRouter.requestBuildPlan(prompt, source);
 
-                // Check if cancelled mid-flight
                 if (!ACTIVE_BUILDS.contains(pid)) return;
 
-                // Step 2: parse
-                BuildPlan plan = BuildPlanParser.parse(json);
+                // 2. Parse
+                BuildPlan plan;
+                try {
+                    plan = BuildPlanParser.parse(json);
+                } catch (Exception e) {
+                    throw new RuntimeException(
+                        "Az AI valasza nem ertheto epitestarv!\n" +
+                        "Hiba: " + e.getMessage() + "\n" +
+                        "AI valasz eleje: " + HttpUtil.truncate(json, 200));
+                }
+
                 int total = plan.blocks.size();
-                source.sendFeedback(() -> Text.literal("\u00a7a[AI Builder] Terv kész! " + total + " blokk, epitek..."), false);
+                if (total == 0) {
+                    source.sendError(Text.literal(
+                        "\u00a7c[AI Builder] Az AI 0 blokkal valaszolt! " +
+                        "Probald meg pontosabban leirni az epitmeny."));
+                    return;
+                }
 
-                // Check again
+                source.sendFeedback(() -> Text.literal(
+                    "\u00a7a[AI Builder] Terv kesz! " + total + " blokk | Epitek..."
+                ), false);
+
                 if (!ACTIVE_BUILDS.contains(pid)) return;
 
-                // Step 3: place
+                // 3. Epites
                 int placed = StructureBuilder.placePlan(source, plan);
-                source.sendFeedback(() -> Text.literal("\u00a7a[AI Builder] Kesz! Lerakott blokkok: " + placed + "/" + total + " (visszavon: /aiundo)"), false);
+                int skipped = total - placed;
+
+                if (skipped > 0) {
+                    source.sendFeedback(() -> Text.literal(
+                        "\u00a7a[AI Builder] Kesz! Lerakott: " + placed + "/" + total +
+                        " blokk (" + skipped + " kihagyva - mar foglalt vagy hataron kivul) | Visszavon: /aiundo"
+                    ), false);
+                } else {
+                    source.sendFeedback(() -> Text.literal(
+                        "\u00a7a[AI Builder] Kesz! " + placed + " blokk lerakva. | Visszavon: /aiundo"
+                    ), false);
+                }
+
             } catch (Exception e) {
-                LOGGER.error("[AI Builder] hiba", e);
-                String msg = e.getMessage() != null ? e.getMessage() : "Ismeretlen hiba";
-                source.sendError(Text.literal("[AI Builder] Hiba: " + msg));
+                LOGGER.error("[AI Builder] Epites kozben hiba tortent", e);
+                String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                // Tobb soros hibauzenet a chaten
+                String[] lines = msg.split("\\n");
+                for (String line : lines) {
+                    if (!line.isBlank()) {
+                        source.sendError(Text.literal("\u00a7c[AI Builder] " + line));
+                    }
+                }
             } finally {
                 ACTIVE_BUILDS.remove(pid);
             }
@@ -108,12 +160,13 @@ public class AIBuilderMod implements ModInitializer {
             String pid = source.getPlayerOrThrow().getUuidAsString();
             if (ACTIVE_BUILDS.remove(pid)) {
                 source.sendFeedback(() -> Text.literal("\u00a7c[AI Builder] Epites leallitva."), false);
+                LOGGER.info("[AI Builder] Epites megszakitva: {}", pid);
             } else {
                 source.sendFeedback(() -> Text.literal("\u00a77[AI Builder] Nincs aktiv epites."), false);
             }
             return 1;
         } catch (Exception e) {
-            source.sendError(Text.literal("Csak jatekos hasznalhatja."));
+            source.sendError(Text.literal("\u00a7c[AI Builder] Csak jatekos hasznalhatja."));
             return 0;
         }
     }
@@ -121,13 +174,17 @@ public class AIBuilderMod implements ModInitializer {
     private int showStatus(ServerCommandSource source) {
         try {
             String pid = source.getPlayerOrThrow().getUuidAsString();
+            SimpleConfig cfg = ConfigManager.load();
             boolean active = ACTIVE_BUILDS.contains(pid);
             source.sendFeedback(() -> Text.literal(
-                active ? "\u00a7e[AI Builder] Aktiv epites folyamatban..." : "\u00a7a[AI Builder] Nincs aktiv epites."
+                "\u00a7e[AI Builder] Statusz: " + (active ? "\u00a7cEPITES FOLYAMATBAN" : "\u00a7aSZABAD") +
+                " | Provider: openrouter" +
+                " | Modell: " + (cfg.openrouter != null ? cfg.openrouter.model : "N/A") +
+                " | MaxBlokk: " + cfg.maxBlocks
             ), false);
             return 1;
         } catch (Exception e) {
-            source.sendError(Text.literal("Csak jatekos hasznalhatja."));
+            source.sendError(Text.literal("\u00a7c[AI Builder] Csak jatekos hasznalhatja."));
             return 0;
         }
     }
