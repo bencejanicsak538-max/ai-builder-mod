@@ -6,6 +6,10 @@ public class SimpleConfig {
     public int maxRadius = 24;
     public boolean allowReplaceSolid = false;
     public boolean requiresOP = false;
+    public String defaultStyle = "none"; // none, medieval, modern, fantasy, survival
+    public int buildSpeedMs = 60;        // ms / blokk, 0 = azonnali
+    public boolean autoPreview = false;  // automatikus preview epitesnel
+    public int retryCount = 2;           // AI hibas JSON eseten hanyszor probaljuk ujra
 
     public OpenRouterConfig openrouter = new OpenRouterConfig(
         "PUT_YOUR_OPENROUTER_API_KEY_HERE",
@@ -19,9 +23,7 @@ public class SimpleConfig {
         public String url;
         public OpenRouterConfig() {}
         public OpenRouterConfig(String apiKey, String model, String url) {
-            this.apiKey = apiKey;
-            this.model = model;
-            this.url = url;
+            this.apiKey = apiKey; this.model = model; this.url = url;
         }
     }
 }
